@@ -1,0 +1,62 @@
+{% extends 'layout.html' %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Header -->
+  <h1 class="text-3xl font-bold text-gray-800">Dashboard</h1>
+  <p class="text-gray-600">Welcome, Admin. Here’s an overview of the school payment system.</p>
+
+  <!-- Summary Cards -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div class="bg-white shadow rounded-lg p-6">
+      <h2 class="text-lg font-bold text-gray-700">Total Students</h2>
+      <p class="text-3xl font-extrabold text-indigo-700">{{ total_students }}</p>
+    </div>
+    <div class="bg-white shadow rounded-lg p-6">
+      <h2 class="text-lg font-bold text-gray-700">Payments This Term</h2>
+      <p class="text-3xl font-extrabold text-green-600">₦{{ "{:,.2f}".format(total_payments) }}</p>
+    </div>
+    <div class="bg-white shadow rounded-lg p-6">
+      <h2 class="text-lg font-bold text-gray-700">Outstanding Balance</h2>
+      <p class="text-3xl font-extrabold text-red-600">₦{{ "{:,.2f}".format(outstanding_balance) }}</p>
+    </div>
+  </div>
+
+  <!-- Recent Payments -->
+  <div class="bg-white shadow rounded-lg p-6">
+    <h2 class="text-xl font-bold text-gray-700 mb-4">Recent Payments</h2>
+    {% if recent_payments %}
+    <table class="w-full text-left border-collapse">
+      <thead>
+        <tr class="bg-gray-100">
+          <th class="p-2 border">Student</th>
+          <th class="p-2 border">Date</th>
+          <th class="p-2 border">Amount</th>
+          <th class="p-2 border">Type</th>
+          <th class="p-2 border">Term</th>
+          <th class="p-2 border">Session</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in recent_payments %}
+        <tr class="border-t">
+          <td class="p-2">{{ p.student.name }}</td>
+          <td class="p-2">{{ p.payment_date.strftime('%Y-%m-%d') }}</td>
+          <td class="p-2">₦{{ "{:,.2f}".format(p.amount_paid) }}</td>
+          <td class="p-2">{{ p.payment_type }}</td>
+          <td class="p-2">{{ p.term }}</td>
+          <td class="p-2">{{ p.session }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-gray-500">No recent payments yet.</p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

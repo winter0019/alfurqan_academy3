@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{% block title %}School Payment System{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+</head>
+<body class="bg-gray-100 font-sans">
+
+  <div class="flex h-screen">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-indigo-700 text-white flex flex-col">
+      <div class="p-6 text-center border-b border-indigo-600">
+        <h1 class="text-2xl font-bold">School Admin</h1>
+      </div>
+      <nav class="flex-1 p-4 space-y-2">
+        <a href="{{ url_for('dashboard') }}" class="block px-4 py-2 rounded hover:bg-indigo-600">Dashboard</a>
+        <a href="{{ url_for('add_student') }}" class="block px-4 py-2 rounded hover:bg-indigo-600">Add Student</a>
+        <a href="{{ url_for('add_payment') }}" class="block px-4 py-2 rounded hover:bg-indigo-600">Add Payment</a>
+        <a href="{{ url_for('receipt_generator') }}" class="block px-4 py-2 rounded hover:bg-indigo-600">Receipt Generator</a>
+      </nav>
+      <div class="p-4 border-t border-indigo-600">
+        <a href="{{ url_for('logout') }}" class="block px-4 py-2 rounded bg-red-500 hover:bg-red-600 text-center">
+          Logout
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-8 overflow-y-auto">
+      {% block content %}{% endblock %}
+    </main>
+
+  </div>
+
+</body>
+</html>

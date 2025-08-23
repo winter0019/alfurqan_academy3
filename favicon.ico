@@ -1,0 +1,71 @@
+# app.py - A simple Flask application that serves a homepage and a favicon.
+
+import os
+from flask import Flask, send_from_directory
+
+# Create the Flask application instance.
+app = Flask(__name__)
+
+# Define the directory where static files (like the favicon) will be stored.
+# This assumes you have a directory named 'static' in the same folder as app.py.
+STATIC_DIR = os.path.join(app.root_path, 'static')
+
+# Create the static directory if it doesn't exist.
+if not os.path.exists(STATIC_DIR):
+    os.makedirs(STATIC_DIR)
+
+# --- ROUTES ---
+
+@app.route('/')
+def index():
+    """
+    Handles the homepage request.
+    
+    This route will serve a simple HTML page.
+    """
+    return """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>My Flask App</title>
+        <!-- 
+        The link tag below tells the browser where to find the favicon.
+        It points to our new route, '/favicon.ico'.
+        -->
+        <link rel="icon" href="/favicon.ico" type="image/svg+xml">
+    </head>
+    <body style="font-family: sans-serif; text-align: center; margin-top: 50px;">
+        <h1>Hello from Flask!</h1>
+        <p>This is a simple homepage.</p>
+        <p>The browser should now be displaying a favicon in the tab.</p>
+    </body>
+    </html>
+    """
+
+@app.route('/favicon.ico')
+def favicon():
+    """
+    Handles the favicon request.
+    
+    This route is specifically designed to serve the favicon.
+    We are using a simple inline SVG to avoid needing an external file.
+    The response is sent as an SVG image.
+    """
+    # Create the SVG content for a simple icon (a blue circle).
+    svg_content = """
+    <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="16" cy="16" r="14" fill="#2058e8" />
+    </svg>
+    """
+    
+    # Return the SVG content directly with the correct MIME type.
+    return app.response_class(svg_content, mimetype='image/svg+xml')
+
+# This is the standard way to run the Flask application.
+# The `if __name__ == '__main__':` block ensures the server only runs
+# when you execute this script directly.
+if __name__ == '__main__':
+    # You can change host and port as needed.
+    app.run(host='0.0.0.0', port=8080, debug=True)

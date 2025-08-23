@@ -1,0 +1,12 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="max-w-lg mx-auto bg-white p-6 rounded shadow">
+  <h2 class="text-xl font-bold mb-4">Add Student</h2>
+  <form method="POST">
+    <input type="text" name="name" placeholder="Student Name" class="w-full border p-2 mb-3 rounded">
+    <input type="text" name="reg_number" placeholder="Reg Number" class="w-full border p-2 mb-3 rounded">
+    <input type="text" name="student_class" placeholder="Class" class="w-full border p-2 mb-3 rounded">
+    <button type="submit" class="w-full bg-green-600 text-white py-2 rounded">Add Student</button>
+  </form>
+</div>
+{% endblock %}

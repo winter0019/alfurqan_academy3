@@ -1,0 +1,43 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="max-w-4xl mx-auto bg-white p-6 rounded shadow">
+  <h2 class="text-2xl font-bold mb-4">Payment History</h2>
+
+  <div class="mb-6">
+    <p><strong>Student Name:</strong> {{ student.name }}</p>
+    <p><strong>Reg Number:</strong> {{ student.reg_number }}</p>
+    <p><strong>Class:</strong> {{ student.student_class }}</p>
+  </div>
+
+  {% if payments %}
+  <table class="w-full border">
+    <thead>
+      <tr class="bg-gray-100">
+        <th class="p-2">Date</th>
+        <th class="p-2">Amount</th>
+        <th class="p-2">Type</th>
+        <th class="p-2">Term</th>
+        <th class="p-2">Session</th>
+        <th class="p-2">Receipt</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in payments %}
+      <tr class="border-t">
+        <td class="p-2">{{ p.payment_date.strftime('%Y-%m-%d') }}</td>
+        <td class="p-2">₦{{ "{:,.2f}".format(p.amount_paid) }}</td>
+        <td class="p-2">{{ p.payment_type }}</td>
+        <td class="p-2">{{ p.term }}</td>
+        <td class="p-2">{{ p.session }}</td>
+        <td class="p-2">
+          <a href="{{ url_for('view_receipt', payment_id=p.id) }}" target="_blank" class="text-blue-600">View</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="text-gray-500">No payments recorded yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

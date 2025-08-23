@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>School Management App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+  <div id="root"></div>
+
+  <!-- Firebase setup -->
+  <script type="module">
+    import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js";
+    import { 
+      getFirestore, collection, onSnapshot, addDoc, doc, getDoc, updateDoc 
+    } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDV-a3Truf31szYDWIC-46Y0UYu_f-hUNY",
+      authDomain: "school-management-app-07.firebaseapp.com",
+      projectId: "school-management-app-07",
+      storageBucket: "school-management-app-07.firebasestorage.app",
+      messagingSenderId: "316366213325",
+      appId: "1:316366213325:web:0cd8b5556aa64aee4f7961",
+      measurementId: "G-48Y44RQZT8"
+    };
+
+    const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+
+    window.getApp = getApp;
+    window.getApps = getApps;
+    window.getFirestore = getFirestore;
+    window.collection = collection;
+    window.onSnapshot = onSnapshot;
+    window.addDoc = addDoc;
+    window.doc = doc;
+    window.getDoc = getDoc;
+    window.updateDoc = updateDoc;
+  </script>
+
+  <!-- React App -->
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const Sidebar = ({ setView }) => (
+      <div className="w-64 bg-blue-700 text-white min-h-screen p-6">
+        <h2 className="text-2xl font-bold mb-6">School Manager</h2>
+        <nav>
+          <button onClick={() => setView("dashboard")} className="block w-full text-left py-2 hover:bg-blue-800 rounded">Dashboard</button>
+          <button onClick={() => setView("students")} className="block w-full text-left py-2 hover:bg-blue-800 rounded">Students</button>
+          <button onClick={() => setView("addStudent")} className="block w-full text-left py-2 hover:bg-blue-800 rounded">Add Student</button>
+          <button onClick={() => setView("addPayment")} className="block w-full text-left py-2 hover:bg-blue-800 rounded">Add Payment</button>
+        </nav>
+      </div>
+    );
+
+    const Header = () => (
+      <header className="bg-white shadow p-4 flex justify-between items-center">
+        <h1 className="text-xl font-bold">School Management System</h1>
+      </header>
+    );
+
+    const StudentList = ({ students }) => (
+      <div className="p-6">
+        <h2 className="text-2xl font-bold mb-4">Students</h2>
+        <table className="min-w-full bg-white border rounded shadow">
+          <thead>
+            <tr className="bg-gray-200 text-left">
+              <th className="py-2 px-4 border">Name</th>
+              <th className="py-2 px-4 border">Class</th>
+              <th className="py-2 px-4 border">Fees Paid</th>
+            </tr>
+          </thead>
+          <tbody>
+            {students.map((s, idx) => (
+              <tr key={idx} className="hover:bg-gray-100">
+                <td className="py-2 px-4 border">{s.name}</td>
+                <td className="py-2 px-4 border">{s.className}</td>
+                <td className="py-2 px-4 border">₦{s.feesPaid || 0}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+
+    const AddStudentForm = ({ onAdd }) => {
+      const [name, setName] = useState("");
+      const [className, setClassName] = useState("");
+
+      const handleSubmit = e => {
+        e.preventDefault();
+        if (name && className) {
+          onAdd({ name, className, feesPaid: 0 });
+          setName("");
+          setClassName("");
+        }
+      };
+
+      return (
+        <div className="p-6">
+          <h2 className="text-2xl font-bold mb-4">Add Student</h2>
+          <form onSubmit={handleSubmit} className="space-y-4 bg-white p-6 rounded shadow">
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Student Name" className="w-full p-2 border rounded" required />
+            <input value={className} onChange={e => setClassName(e.target.value)} placeholder="Class" className="w-full p-2 border rounded" required />
+            <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Add Student</button>
+          </form>
+        </div>
+      );
+    };
+
+    const AddPaymentForm = ({ students, onPayment }) => {
+      const [studentId, setStudentId] = useState("");
+      const [amount, setAmount] = useState("");
+      const [term, setTerm] = useState("");
+      const [year, setYear] = useState("");
+
+      const handleSubmit = e => {
+        e.preventDefault();
+        const student = students.find(s => s.id === studentId);
+        if (student && amount && term && year) {
+          onPayment(student, parseInt(amount), term, year);
+          setStudentId(""); setAmount(""); setTerm(""); setYear("");
+        }
+      };
+
+      return (
+        <div className="p-6">
+          <h2 className="text-2xl font-bold mb-4">Add Payment</h2>
+          <form onSubmit={handleSubmit} className="space-y-4 bg-white p-6 rounded shadow">
+            <select value={studentId} onChange={e => setStudentId(e.target.value)} className="w-full p-2 border rounded" required>
+              <option value="">Select Student</option>
+              {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.className})</option>)}
+            </select>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount" className="w-full p-2 border rounded" required />
+            <input type="text" value={term} onChange={e => setTerm(e.target.value)} placeholder="Term (e.g. 1st, 2nd, 3rd)" className="w-full p-2 border rounded" required />
+            <input type="text" value={year} onChange={e => setYear(e.target.value)} placeholder="Academic Year (e.g. 2025/2026)" className="w-full p-2 border rounded" required />
+            <button type="submit" className="bg-green-600 text-white px-4 py-2 rounded">Record Payment</button>
+          </form>
+        </div>
+      );
+    };
+
+    const ReceiptComponent = ({ payment }) => {
+      const generatePDF = () => {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        // Logo
+        const logo = new Image();
+        logo.src = "alfurqan_logo.jpg";  // ensure logo is in same folder
+        logo.onload = () => {
+          doc.addImage(logo, "JPEG", 160, 10, 40, 40);
+
+          // Title
+          doc.setFontSize(14);
+          doc.text("ALFURQAN ACADEMY", 20, 20);
+          doc.text("Nursery, Primary & Secondary School - Mai'adua", 20, 28);
+          doc.setFontSize(12);
+          doc.text("Payment Receipt", 20, 40);
+
+          // Details
+          doc.setFontSize(11);
+          doc.text(`Student: ${payment.student.name}`, 20, 60);
+          doc.text(`Class: ${payment.student.className}`, 20, 70);
+          doc.text(`Amount Paid: ₦${payment.amount}`, 20, 80);
+          doc.text(`Date: ${payment.date}`, 20, 90);
+          doc.text(`Term: ${payment.term}`, 20, 100);
+          doc.text(`Academic Year: ${payment.year}`, 20, 110);
+          doc.text(`Receipt No: ${payment.id}`, 20, 120);
+
+          doc.save("receipt.pdf");
+        };
+      };
+
+      return (
+        <div className="p-6">
+          <h2 className="text-2xl font-bold mb-4">Payment Receipt</h2>
+          <div className="bg-white p-6 rounded shadow space-y-2">
+            <p><strong>Student:</strong> {payment.student.name}</p>
+            <p><strong>Class:</strong> {payment.student.className}</p>
+            <p><strong>Amount:</strong> ₦{payment.amount}</p>
+            <p><strong>Date:</strong> {payment.date}</p>
+            <p><strong>Term:</strong> {payment.term}</p>
+            <p><strong>Academic Year:</strong> {payment.year}</p>
+            <p><strong>Receipt No:</strong> {payment.id}</p>
+            <button onClick={generatePDF} className="bg-blue-600 text-white px-4 py-2 rounded mt-4">Download PDF</button>
+          </div>
+        </div>
+      );
+    };
+
+    const App = () => {
+      const [view, setView] = useState("dashboard");
+      const [students, setStudents] = useState([]);
+      const [currentPayment, setCurrentPayment] = useState(null);
+      const [user, setUser] = useState(null);
+      const dbRef = useRef(null);
+
+      useEffect(() => {
+        dbRef.current = window.getFirestore(window.getApp());
+      }, []);
+
+      const handleLogin = (username, password) => {
+        if (username === "admin" && password === "password") {
+          setUser({ uid: "admin" });
+          const studentsRef = window.collection(dbRef.current, "users", "admin", "students");
+          window.onSnapshot(studentsRef, (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setStudents(data);
+          });
+        } else {
+          alert("Invalid credentials");
+        }
+      };
+
+      const addStudent = async (student) => {
+        if (user) {
+          const studentsRef = window.collection(dbRef.current, "users", "admin", "students");
+          await window.addDoc(studentsRef, student);
+        }
+      };
+
+      const addPayment = async (student, amount, term, year) => {
+        if (user) {
+          const studentRef = window.doc(dbRef.current, "users", "admin", "students", student.id);
+          const docSnap = await window.getDoc(studentRef);
+          if (docSnap.exists()) {
+            const newAmount = (docSnap.data().feesPaid || 0) + amount;
+            await window.updateDoc(studentRef, { feesPaid: newAmount });
+            const payment = {
+              student,
+              amount,
+              date: new Date().toLocaleDateString(),
+              term,
+              year,
+              id: student.id + "-" + Date.now()
+            };
+            setCurrentPayment(payment);
+            setView("receipt");
+          }
+        }
+      };
+
+      return (
+        <div className="flex">
+          <Sidebar setView={setView} />
+          <div className="flex-1">
+            <Header />
+            {user ? (
+              <>
+                {view === "dashboard" && <div className="p-6"><h2 className="text-2xl">Welcome!</h2></div>}
+                {view === "students" && <StudentList students={students} />}
+                {view === "addStudent" && <AddStudentForm onAdd={addStudent} />}
+                {view === "addPayment" && <AddPaymentForm students={students} onPayment={addPayment} />}
+                {view === "receipt" && currentPayment && <ReceiptComponent payment={currentPayment} />}
+              </>
+            ) : (
+              <div className="p-6 max-w-md mx-auto">
+                <h2 className="text-2xl font-bold mb-4">Login</h2>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  const username = e.target.username.value;
+                  const password = e.target.password.value;
+                  handleLogin(username, password);
+                }} className="space-y-4 bg-white p-6 rounded shadow">
+                  <input type="text" name="username" placeholder="Username" className="w-full p-2 border rounded" required />
+                  <input type="password" name="password" placeholder="Password" className="w-full p-2 border rounded" required />
+                  <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Login</button>
+                </form>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
