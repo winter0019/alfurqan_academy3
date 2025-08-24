@@ -36,7 +36,7 @@ class Payment(db.Model):
 # AUTH (Simple Admin Login)
 # ---------------------------
 ADMIN_USER = "admin"
-ADMIN_PASS = "password"  # change this in production!
+ADMIN_PASS = "password"  # 🔴 change in production
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -94,6 +94,7 @@ def add_student():
         return redirect(url_for("add_student"))
     return render_template("add_student.html")
 
+
 @app.route("/student/<int:student_id>/payments")
 def student_payments(student_id):
     if not session.get("admin"):
@@ -109,7 +110,6 @@ def add_payment():
     if not session.get("admin"):
         return redirect(url_for("index"))
 
-    students = Student.query.all()
     if request.method == "POST":
         student_id = request.form["student_id"]
         amount_paid = float(request.form["amount_paid"])
@@ -130,7 +130,27 @@ def add_payment():
         flash("Payment recorded successfully!", "success")
         return redirect(url_for("add_payment"))
 
-    return render_template("add_payment.html", students=students)
+    return render_template("add_payment.html")
+
+
+@app.route("/search-students")
+def search_students():
+    if not session.get("admin"):
+        return redirect(url_for("index"))
+
+    query = request.args.get("q", "")
+    results = []
+    if query:
+        results = Student.query.filter(
+            (Student.name.ilike(f"%{query}%")) |
+            (Student.reg_number.ilike(f"%{query}%"))
+        ).all()
+    return {
+        "students": [
+            {"id": s.id, "name": s.name, "reg_number": s.reg_number}
+            for s in results
+        ]
+    }
 
 
 # ---------------------------
@@ -171,7 +191,6 @@ def view_receipt(payment_id):
     # Header
     p.setFont("Helvetica-Bold", 16)
     p.drawString(200, height - 50, "ALFURQAN ACADEMY")
-
     p.setFont("Helvetica", 10)
     p.drawString(200, height - 65, "Mai’adua | Motto: Academic Excellence")
     p.drawString(200, height - 80, "Tel: 07067702084, 08025076989")
