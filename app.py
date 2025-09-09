@@ -19,7 +19,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize the database and migrations
 db = SQLAlchemy(app)
-migrate = Migrate(app, db)
+migrate = Migrate(app, db) # This line is crucial for the 'flask db' command
 
 # ---------------------------
 # MODELS
@@ -121,7 +121,6 @@ def add_payment():
         return redirect(url_for("index"))
 
     if request.method == "POST":
-        # Add server-side validation here to prevent ValueError
         student_id = request.form["student_id"]
         
         # Safe way to handle the amount_paid field
