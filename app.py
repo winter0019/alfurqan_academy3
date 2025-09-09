@@ -10,16 +10,24 @@ from datetime import datetime
 # Initialize the Flask app
 app = Flask(__name__)
 
-# Configure the database connection.
-# The 'os.environ.get()' method gets the DATABASE_URL environment variable set on Render.
-# The fallback is for local development with a SQLite database.
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///alfurqan.db')
+# ---------------------------
+# DATABASE CONFIG
+# ---------------------------
+db_url = os.environ.get("DATABASE_URL", "sqlite:///alfurqan.db")
+
+# Convert Render's postgres:// → postgresql+pg8000://
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql+pg8000://", 1)
+elif db_url.startswith("postgresql://"):
+    db_url = db_url.replace("postgresql://", "postgresql+pg8000://", 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SECRET_KEY'] = 'supersecret'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize the database and migrations
 db = SQLAlchemy(app)
-migrate = Migrate(app, db) # This line is crucial for the 'flask db' command
+migrate = Migrate(app, db)  # This enables flask db commands
 
 # ---------------------------
 # MODELS
@@ -46,7 +54,7 @@ class Payment(db.Model):
 # AUTH (Simple Admin Login)
 # ---------------------------
 ADMIN_USER = "admin"
-ADMIN_PASS = "password"  # 🔴 change in production
+ADMIN_PASS = "password"  # 🔴 Change this in production!
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -123,7 +131,7 @@ def add_payment():
     if request.method == "POST":
         student_id = request.form["student_id"]
         
-        # Safe way to handle the amount_paid field
+        # Handle amount_paid safely
         amount_paid_str = request.form.get("amount_paid")
         if not amount_paid_str:
             flash("Amount paid is required.", "error")
@@ -263,4 +271,4 @@ def view_receipt(payment_id):
 # INIT
 # ---------------------------
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
