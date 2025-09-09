@@ -1,15 +1,25 @@
 from flask import Flask, render_template, request, redirect, url_for, session, send_file, flash
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 import os
 from datetime import datetime
 
+# Initialize the Flask app
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///alfurqan.db'
+
+# Configure the database connection.
+# The 'os.environ.get()' method gets the DATABASE_URL environment variable set on Render.
+# The fallback is for local development with a SQLite database.
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///alfurqan.db')
 app.config['SECRET_KEY'] = 'supersecret'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Initialize the database and migrations
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 
 # ---------------------------
 # MODELS
@@ -111,8 +121,21 @@ def add_payment():
         return redirect(url_for("index"))
 
     if request.method == "POST":
+        # Add server-side validation here to prevent ValueError
         student_id = request.form["student_id"]
-        amount_paid = float(request.form["amount_paid"])
+        
+        # Safe way to handle the amount_paid field
+        amount_paid_str = request.form.get("amount_paid")
+        if not amount_paid_str:
+            flash("Amount paid is required.", "error")
+            return redirect(url_for("add_payment"))
+        
+        try:
+            amount_paid = float(amount_paid_str)
+        except ValueError:
+            flash("Invalid amount. Please enter a valid number.", "error")
+            return redirect(url_for("add_payment"))
+            
         payment_type = request.form["payment_type"]
         term = request.form["term"]
         session_year = request.form["session"]
@@ -241,6 +264,4 @@ def view_receipt(payment_id):
 # INIT
 # ---------------------------
 if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
     app.run(debug=True)
