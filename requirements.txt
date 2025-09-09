@@ -13,7 +13,8 @@ itsdangerous==2.2.0
 click==8.2.2
 
 python-dotenv==1.0.1
-reportlab==4.2.5   # For PDF receipts
-openpyxl==3.1.5    # If you export to Excel
+reportlab==4.2.5  # For PDF receipts
+openpyxl==3.1.5   # If you export to Excel
 
-gunicorn==23.0.0   # Needed for Render deployment
+gunicorn==23.0.0  # Needed for Render deployment
+psycopg2-binary==2.9.9 # For PostgreSQL database connectivity
