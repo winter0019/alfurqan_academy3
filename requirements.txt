@@ -17,4 +17,4 @@ reportlab==4.2.5  # For PDF receipts
 openpyxl==3.1.5   # If you export to Excel
 
 gunicorn==23.0.0  # Needed for Render deployment
-psycopg2==2.9.9   # Switched to psycopg2 for source installation
+pg8000
