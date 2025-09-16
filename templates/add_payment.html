@@ -1,68 +1,85 @@
 {% extends 'layout.html' %}
 {% block content %}
 <div class="max-w-lg mx-auto bg-white p-6 rounded shadow">
-  <h2 class="text-xl font-bold mb-4">Record Payment</h2>
-  <form method="POST">
-    
-    <!-- Student Search -->
-    <input type="text" id="student-search" placeholder="Search student by name or reg number"
-           class="w-full border p-2 mb-3 rounded">
+    <h2 class="text-xl font-bold mb-4">Record Payment</h2>
+    <form method="POST">
+        <input type="text" id="student-search" placeholder="Search student by name or reg number"
+               class="w-full border p-2 mb-3 rounded">
+        <ul id="search-results" class="border rounded mb-3 hidden"></ul>
+        <input type="hidden" name="student_id" id="student_id">
 
-    <ul id="search-results" class="border rounded mb-3 hidden"></ul>
+        <div id="student-info" class="mb-4 hidden p-3 border rounded-md bg-gray-50">
+            <p><strong>Student:</strong> <span id="student-name"></span></p>
+            <p><strong>Class:</strong> <span id="student-class"></span></p>
+        </div>
 
-    <input type="hidden" name="student_id" id="student_id">
+        <div class="mb-4 p-3 border rounded-md bg-gray-50">
+            <label for="outstanding_balance_input" class="block text-sm font-bold text-gray-700">
+                Current Outstanding Balance (₦)
+            </label>
+            <input type="number" step="0.01" name="outstanding_balance_input" id="outstanding_balance_input"
+                   placeholder="e.g. 50000.00"
+                   class="w-full border p-2 mt-1 rounded" required>
+        </div>
 
-    <input type="number" step="0.01" name="amount_paid" placeholder="Amount Paid"
-           class="w-full border p-2 mb-3 rounded">
-    <input type="text" name="payment_type" placeholder="Payment Type"
-           class="w-full border p-2 mb-3 rounded">
+        <input type="number" step="0.01" name="amount_paid" placeholder="Amount Paid (₦)"
+               class="w-full border p-2 mb-3 rounded" required>
+        <input type="text" name="payment_type" placeholder="Payment Type"
+               class="w-full border p-2 mb-3 rounded" required>
 
-    <select name="term" class="w-full border p-2 mb-3 rounded">
-      <option>1st Term</option>
-      <option>2nd Term</option>
-      <option>3rd Term</option>
-    </select>
+        <select name="term" id="term-select" class="w-full border p-2 mb-3 rounded" required>
+            <option value="">Select Term</option>
+            <option value="1st Term">1st Term</option>
+            <option value="2nd Term">2nd Term</option>
+            <option value="3rd Term">3rd Term</option>
+        </select>
 
-    <input type="text" name="session" placeholder="Session (e.g. 2024/2025)"
-           class="w-full border p-2 mb-3 rounded">
+        <input type="text" name="session" id="session-input" placeholder="Session (e.g. 2024/2025)"
+               class="w-full border p-2 mb-3 rounded" required>
 
-    <button type="submit" class="w-full bg-green-600 text-white py-2 rounded">Save Payment</button>
-  </form>
+        <button type="submit" class="w-full bg-green-600 text-white py-2 rounded">Save Payment</button>
+    </form>
 </div>
 
 <script>
-const searchInput = document.getElementById("student-search");
-const resultsList = document.getElementById("search-results");
-const hiddenId = document.getElementById("student_id");
+    const searchInput = document.getElementById("student-search");
+    const resultsList = document.getElementById("search-results");
+    const hiddenId = document.getElementById("student_id");
+    const studentInfoDiv = document.getElementById("student-info");
+    const studentNameSpan = document.getElementById("student-name");
 
-searchInput.addEventListener("input", async function() {
-  const q = this.value;
-  if (q.length < 2) {
-    resultsList.innerHTML = "";
-    resultsList.classList.add("hidden");
-    return;
-  }
+    searchInput.addEventListener("input", async function() {
+        const q = this.value;
+        if (q.length < 2) {
+            resultsList.innerHTML = "";
+            resultsList.classList.add("hidden");
+            studentInfoDiv.classList.add("hidden");
+            return;
+        }
 
-  const res = await fetch(`/search-students?q=${q}`);
-  const data = await res.json();
+        const res = await fetch(`/search-students?q=${q}`);
+        const data = await res.json();
 
-  resultsList.innerHTML = "";
-  if (data.students.length > 0) {
-    resultsList.classList.remove("hidden");
-    data.students.forEach(s => {
-      const li = document.createElement("li");
-      li.textContent = `${s.name} (${s.reg_number})`;
-      li.className = "p-2 hover:bg-gray-100 cursor-pointer";
-      li.onclick = () => {
-        searchInput.value = `${s.name} (${s.reg_number})`;
-        hiddenId.value = s.id;
-        resultsList.classList.add("hidden");
-      };
-      resultsList.appendChild(li);
+        resultsList.innerHTML = "";
+        if (data.students.length > 0) {
+            resultsList.classList.remove("hidden");
+            data.students.forEach(s => {
+                const li = document.createElement("li");
+                li.textContent = `${s.name} (${s.reg_number})`;
+                li.className = "p-2 hover:bg-gray-100 cursor-pointer";
+                li.onclick = () => {
+                    searchInput.value = `${s.name} (${s.reg_number})`;
+                    hiddenId.value = s.id;
+                    resultsList.classList.add("hidden");
+                    studentNameSpan.textContent = s.name;
+                    studentInfoDiv.classList.remove("hidden");
+                };
+                resultsList.appendChild(li);
+            });
+        } else {
+            resultsList.classList.add("hidden");
+            studentInfoDiv.classList.add("hidden");
+        }
     });
-  } else {
-    resultsList.classList.add("hidden");
-  }
-});
 </script>
 {% endblock %}
