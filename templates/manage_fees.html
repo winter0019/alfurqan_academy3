@@ -1,0 +1,167 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="max-w-lg mx-auto bg-white p-6 rounded shadow">
+  <h2 class="text-xl font-bold mb-4">Record Payment</h2>
+  <form method="POST" id="payment-form">
+    
+    <input type="text" id="student-search" placeholder="Search student by name or reg number"
+           class="w-full border p-2 mb-3 rounded">
+
+    <ul id="search-results" class="border rounded mb-3 hidden"></ul>
+    <input type="hidden" name="student_id" id="student_id">
+
+    <div id="student-info" class="mb-4 hidden p-3 border rounded-md bg-gray-50">
+        <p><strong>Student:</strong> <span id="student-name"></span></p>
+        <p><strong>Total Fees for Term:</strong> ₦<span id="total-fees"></span></p>
+        <p><strong>Previous Payments:</strong> ₦<span id="previous-payments"></span></p>
+        <p class="font-bold">Outstanding Balance: ₦<span id="outstanding-balance"></span></p>
+    </div>
+
+    <input type="number" step="0.01" name="amount_paid" placeholder="Amount Paid"
+           class="w-full border p-2 mb-3 rounded" required>
+    <input type="text" name="payment_type" placeholder="Payment Type"
+           class="w-full border p-2 mb-3 rounded" required>
+
+    <select name="term" id="term-select" class="w-full border p-2 mb-3 rounded" required>
+      <option value="">Select Term</option>
+      <option value="1st Term">1st Term</option>
+      <option value="2nd Term">2nd Term</option>
+      <option value="3rd Term">3rd Term</option>
+    </select>
+
+    <input type="text" name="session" id="session-input" placeholder="Session (e.g. 2024/2025)"
+           class="w-full border p-2 mb-3 rounded" required>
+
+    <button type="submit" class="w-full bg-green-600 text-white py-2 rounded">Save Payment</button>
+  </form>
+</div>
+
+<div id="receipt-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center hidden">
+  <div class="bg-white p-8 rounded-lg shadow-xl max-w-md w-full">
+    <h3 class="text-2xl font-bold mb-4 text-center">Payment Receipt</h3>
+    <div id="receipt-details"></div>
+    <div class="flex justify-end mt-6 space-x-2">
+      <button id="close-receipt-modal" class="bg-gray-500 text-white py-2 px-4 rounded">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const searchInput = document.getElementById("student-search");
+const resultsList = document.getElementById("search-results");
+const hiddenId = document.getElementById("student_id");
+const studentInfo = document.getElementById("student-info");
+const studentName = document.getElementById("student-name");
+const totalFees = document.getElementById("total-fees");
+const previousPayments = document.getElementById("previous-payments");
+const outstandingBalance = document.getElementById("outstanding-balance");
+const paymentForm = document.getElementById("payment-form");
+const receiptModal = document.getElementById("receipt-modal");
+const receiptDetails = document.getElementById("receipt-details");
+const closeReceiptModal = document.getElementById("close-receipt-modal");
+const termSelect = document.getElementById("term-select");
+const sessionInput = document.getElementById("session-input");
+
+let selectedStudentId = null;
+
+async function fetchStudentFinancials(studentId, term, session) {
+    if (!studentId || !term || !session) {
+        studentInfo.classList.add("hidden");
+        return;
+    }
+    const res = await fetch(`/student-financials?student_id=${studentId}&term=${term}&session=${session}`);
+    const data = await res.json();
+    if (data.success) {
+        studentName.textContent = data.student_name;
+        totalFees.textContent = data.total_fees.toFixed(2);
+        previousPayments.textContent = data.previous_payments.toFixed(2);
+        outstandingBalance.textContent = data.outstanding_balance.toFixed(2);
+        studentInfo.classList.remove("hidden");
+    } else {
+        alert(data.error);
+        studentInfo.classList.add("hidden");
+    }
+}
+
+searchInput.addEventListener("input", async function() {
+  const q = this.value;
+  if (q.length < 2) {
+    resultsList.innerHTML = "";
+    resultsList.classList.add("hidden");
+    studentInfo.classList.add("hidden");
+    return;
+  }
+  const res = await fetch(`/search-students?q=${q}`);
+  const data = await res.json();
+  resultsList.innerHTML = "";
+  if (data.students.length > 0) {
+    resultsList.classList.remove("hidden");
+    data.students.forEach(s => {
+      const li = document.createElement("li");
+      li.textContent = `${s.name} (${s.reg_number})`;
+      li.className = "p-2 hover:bg-gray-100 cursor-pointer";
+      li.onclick = () => {
+        searchInput.value = `${s.name} (${s.reg_number})`;
+        hiddenId.value = s.id;
+        resultsList.classList.add("hidden");
+        selectedStudentId = s.id;
+        fetchStudentFinancials(selectedStudentId, termSelect.value, sessionInput.value);
+      };
+      resultsList.appendChild(li);
+    });
+  } else {
+    resultsList.classList.add("hidden");
+    studentInfo.classList.add("hidden");
+  }
+});
+
+termSelect.addEventListener("change", () => {
+    if (selectedStudentId) {
+        fetchStudentFinancials(selectedStudentId, termSelect.value, sessionInput.value);
+    }
+});
+sessionInput.addEventListener("input", () => {
+    if (selectedStudentId) {
+        fetchStudentFinancials(selectedStudentId, termSelect.value, sessionInput.value);
+    }
+});
+
+
+paymentForm.addEventListener("submit", async function(event) {
+  event.preventDefault();
+  const formData = new FormData(paymentForm);
+  const response = await fetch('/add-payment', {
+    method: 'POST',
+    body: formData
+  });
+  const result = await response.json();
+  
+  if (result.success) {
+    receiptDetails.innerHTML = `
+        <p class="mb-2"><strong>Student:</strong> ${result.receipt.student_name}</p>
+        <p class="mb-2"><strong>Reg Number:</strong> ${result.receipt.reg_number}</p>
+        <p class="mb-2"><strong>Date:</strong> ${result.receipt.date}</p>
+        <hr class="my-4">
+        <p class="mb-2"><strong>Term:</strong> ${result.receipt.term}</p>
+        <p class="mb-2"><strong>Session:</strong> ${result.receipt.session}</p>
+        <p class="mb-2"><strong>Payment Type:</strong> ${result.receipt.payment_type}</p>
+        <hr class="my-4">
+        <p class="mb-2"><strong>Amount Paid:</strong> ₦${result.receipt.amount_paid.toFixed(2)}</p>
+        <p class="mb-2"><strong>Total Paid to Date:</strong> ₦${result.receipt.total_paid.toFixed(2)}</p>
+        <hr class="my-4">
+        <p class="mb-2 font-bold text-red-600">Outstanding Balance: ₦${result.receipt.outstanding_balance.toFixed(2)}</p>
+    `;
+    receiptModal.classList.remove("hidden");
+    paymentForm.reset();
+    studentInfo.classList.add("hidden");
+    selectedStudentId = null;
+  } else {
+    alert(result.error);
+  }
+});
+
+closeReceiptModal.addEventListener("click", () => {
+  receiptModal.classList.add("hidden");
+});
+</script>
+{% endblock %}
