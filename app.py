@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, send_file, flash
+from flask import Flask, render_template, request, redirect, url_for, session, send_file, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from io import BytesIO
@@ -6,6 +6,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 import os
 from datetime import datetime
+from sqlalchemy import UniqueConstraint
 
 # Initialize the Flask app
 app = Flask(__name__)
@@ -39,7 +40,6 @@ class Student(db.Model):
     student_class = db.Column(db.String(50), nullable=False)
     payments = db.relationship("Payment", backref="student", lazy=True)
 
-
 class Payment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     amount_paid = db.Column(db.Float, nullable=False)
@@ -49,6 +49,14 @@ class Payment(db.Model):
     session = db.Column(db.String(20))
     student_id = db.Column(db.Integer, db.ForeignKey("student.id"), nullable=False)
 
+class Fee(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    student_class = db.Column(db.String(50), nullable=False)
+    term = db.Column(db.String(20), nullable=False)
+    session = db.Column(db.String(20), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+
+    __table_args__ = (UniqueConstraint('student_class', 'term', 'session', name='_class_term_session_uc'),)
 
 # ---------------------------
 # AUTH (Simple Admin Login)
@@ -66,7 +74,6 @@ def index():
             return redirect(url_for("dashboard"))
         flash("Invalid credentials", "error")
     return render_template("index.html")
-
 
 @app.route('/dashboard')
 def dashboard():
@@ -86,12 +93,10 @@ def dashboard():
         recent_payments=recent_payments
     )
 
-
 @app.route("/logout")
 def logout():
     session.pop("admin", None)
     return redirect(url_for("index"))
-
 
 # ---------------------------
 # STUDENTS & PAYMENTS
@@ -112,7 +117,6 @@ def add_student():
         return redirect(url_for("add_student"))
     return render_template("add_student.html")
 
-
 @app.route("/student/<int:student_id>/payments")
 def student_payments(student_id):
     if not session.get("admin"):
@@ -122,34 +126,39 @@ def student_payments(student_id):
     payments = Payment.query.filter_by(student_id=student_id).all()
     return render_template("student_payments.html", student=student, payments=payments)
 
-
+# MODIFIED ROUTE FOR ADDING PAYMENT
 @app.route("/add-payment", methods=["GET", "POST"])
 def add_payment():
     if not session.get("admin"):
         return redirect(url_for("index"))
 
     if request.method == "POST":
-        student_id = request.form["student_id"]
-        
-        # Handle amount_paid safely
+        student_id = request.form.get("student_id")
+        outstanding_balance_str = request.form.get("outstanding_balance_input")
         amount_paid_str = request.form.get("amount_paid")
-        if not amount_paid_str:
-            flash("Amount paid is required.", "error")
-            return redirect(url_for("add_payment"))
-        
-        try:
-            amount_paid = float(amount_paid_str)
-        except ValueError:
-            flash("Invalid amount. Please enter a valid number.", "error")
-            return redirect(url_for("add_payment"))
-            
-        payment_type = request.form["payment_type"]
-        term = request.form["term"]
-        session_year = request.form["session"]
+        payment_type = request.form.get("payment_type")
+        term = request.form.get("term")
+        session_year = request.form.get("session")
 
+        try:
+            outstanding_balance = float(outstanding_balance_str)
+            amount_paid = float(amount_paid_str)
+        except (ValueError, TypeError):
+            flash("Invalid amount or outstanding balance.", "error")
+            return redirect(url_for("add_payment"))
+
+        student = Student.query.get(student_id)
+        if not student:
+            flash("Student not found.", "error")
+            return redirect(url_for("add_payment"))
+
+        # Calculate the remaining balance
+        remaining_balance = outstanding_balance - amount_paid
+
+        # Record the new payment
         payment = Payment(
             amount_paid=amount_paid,
-            payment_date=datetime.today(),
+            payment_date=datetime.today().date(),
             payment_type=payment_type,
             term=term,
             session=session_year,
@@ -157,8 +166,12 @@ def add_payment():
         )
         db.session.add(payment)
         db.session.commit()
-        flash("Payment recorded successfully!", "success")
-        return redirect(url_for("add_payment"))
+        
+        # Store the remaining balance in a session variable for the receipt view
+        session['remaining_balance'] = remaining_balance
+
+        flash("Payment recorded successfully! Generating receipt...", "success")
+        return redirect(url_for("view_receipt", payment_id=payment.id))
 
     return render_template("add_payment.html")
 
@@ -184,24 +197,57 @@ def search_students():
 
 
 # ---------------------------
-# RECEIPT GENERATOR
+# FEE MANAGEMENT
 # ---------------------------
-@app.route("/receipt-generator", methods=["GET", "POST"])
-def receipt_generator():
+@app.route("/manage-fees", methods=["GET", "POST"])
+def manage_fees():
     if not session.get("admin"):
         return redirect(url_for("index"))
 
-    search_results = []
     if request.method == "POST":
-        query = request.form.get("search_query")
-        if query:
-            search_results = Student.query.filter(
-                (Student.name.ilike(f"%{query}%")) |
-                (Student.reg_number.ilike(f"%{query}%"))
-            ).all()
-    return render_template("receipt_generator.html", search_results=search_results)
+        student_class = request.form.get("student_class")
+        term = request.form.get("term")
+        session_year = request.form.get("session")
+        amount = request.form.get("amount")
+        
+        if not all([student_class, term, session_year, amount]):
+            flash("All fields are required.", "error")
+            return redirect(url_for("manage_fees"))
+        
+        try:
+            fee_amount = float(amount)
+            # Check if a fee record already exists to avoid duplicates
+            existing_fee = Fee.query.filter_by(
+                student_class=student_class,
+                term=term,
+                session=session_year
+            ).first()
+            
+            if existing_fee:
+                existing_fee.amount = fee_amount
+                flash("Fee updated successfully!", "success")
+            else:
+                new_fee = Fee(
+                    student_class=student_class,
+                    term=term,
+                    session=session_year,
+                    amount=fee_amount
+                )
+                db.session.add(new_fee)
+                flash("Fee added successfully!", "success")
+            
+            db.session.commit()
+            
+        except ValueError:
+            flash("Invalid amount. Please enter a valid number.", "error")
+            return redirect(url_for("manage_fees"))
 
+    fees = Fee.query.all()
+    return render_template("manage_fees.html", fees=fees)
 
+# ---------------------------
+# RECEIPT GENERATOR
+# ---------------------------
 @app.route("/view-receipt/<int:payment_id>")
 def view_receipt(payment_id):
     if not session.get("admin"):
@@ -209,6 +255,25 @@ def view_receipt(payment_id):
 
     payment = Payment.query.get_or_404(payment_id)
     student = payment.student
+    
+    # Retrieve the remaining balance from the session
+    remaining_balance = session.pop('remaining_balance', None)
+
+    if remaining_balance is None:
+        # If the user accesses the receipt directly, calculate a basic balance
+        total_paid_for_term = db.session.query(db.func.sum(Payment.amount_paid)).filter(
+            Payment.student_id == student.id,
+            Payment.term == payment.term,
+            Payment.session == payment.session
+        ).scalar() or 0
+        fee_record = Fee.query.filter_by(
+            student_class=student.student_class,
+            term=payment.term,
+            session=payment.session
+        ).first()
+        total_fees = fee_record.amount if fee_record else 0
+        remaining_balance = total_fees - total_paid_for_term
+        flash("Could not find remaining balance from the form. Calculated balance based on fees.", "warning")
 
     buffer = BytesIO()
     p = canvas.Canvas(buffer, pagesize=A4)
@@ -238,11 +303,24 @@ def view_receipt(payment_id):
 
     # Payment Info
     p.drawString(50, y - 80, f"Date: {payment.payment_date.strftime('%Y-%m-%d')}")
-    p.drawString(50, y - 100, f"Amount Paid: ₦{payment.amount_paid:,.2f}")
-    p.drawString(50, y - 120, f"Payment Type: {payment.payment_type}")
-    p.drawString(50, y - 140, f"Term: {payment.term}")
-    p.drawString(50, y - 160, f"Session: {payment.session}")
-    p.drawString(50, y - 180, f"Receipt No: {payment.id}")
+    p.drawString(50, y - 100, f"Term: {payment.term}")
+    p.drawString(50, y - 120, f"Session: {payment.session}")
+    p.drawString(50, y - 140, f"Payment Type: {payment.payment_type}")
+    p.drawString(50, y - 160, f"Receipt No: {payment.id}")
+    
+    # Financial Summary
+    y_summary = y - 200
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(50, y_summary, "Financial Summary")
+    p.setFont("Helvetica", 12)
+    p.drawString(50, y_summary - 20, f"Amount Paid: ₦{payment.amount_paid:,.2f}")
+    p.setFont("Helvetica-Bold", 12)
+    p.setFillColorRGB(0.8, 0, 0) # Set color to red for balance
+    if isinstance(remaining_balance, (float, int)):
+        p.drawString(50, y_summary - 40, f"Remaining Balance: ₦{remaining_balance:,.2f}")
+    else:
+        p.drawString(50, y_summary - 40, f"Remaining Balance: {remaining_balance}")
+    p.setFillColorRGB(0, 0, 0) # Reset color
 
     # Footer
     p.setFont("Helvetica-Oblique", 10)
@@ -252,7 +330,6 @@ def view_receipt(payment_id):
     p.setFont("Helvetica", 12)
     p.drawString(50, 120, "______________________")
     p.drawString(50, 105, "Admin")
-
     p.drawString(350, 120, "______________________")
     p.drawString(350, 105, "Bursar")
 
@@ -266,7 +343,6 @@ def view_receipt(payment_id):
         download_name=f"receipt_{payment.id}.pdf"
     )
 
-
 # ---------------------------
 # INIT
 # ---------------------------
@@ -274,5 +350,3 @@ if __name__ == "__main__":
     with app.app_context():
         db.create_all()  # Ensures tables are created
     app.run(host="0.0.0.0", port=5000, debug=True)
-
-
