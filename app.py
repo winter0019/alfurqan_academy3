@@ -140,6 +140,11 @@ def add_payment():
         term = request.form.get("term")
         session_year = request.form.get("session")
 
+        # --- VALIDATION: Ensure a student is selected ---
+        if not student_id:
+            flash("Please search for and select a student from the list.", "error")
+            return redirect(url_for("add_payment"))
+        
         try:
             outstanding_balance = float(outstanding_balance_str)
             amount_paid = float(amount_paid_str)
