@@ -6,7 +6,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 import os
 from datetime import datetime
-from sqlalchemy import UniqueConstraint, and_
+from sqlalchemy import UniqueConstraint
 from sqlalchemy.orm import joinedload
 
 # Initialize the Flask app
@@ -39,7 +39,8 @@ class Student(db.Model):
     name = db.Column(db.String(150), nullable=False)
     reg_number = db.Column(db.String(50), unique=True, nullable=False)
     student_class = db.Column(db.String(50), nullable=False)
-    payments = db.relationship("Payment", backref="student", lazy="dynamic")
+    # FIX: Changed lazy='dynamic' to lazy='select' for eager loading
+    payments = db.relationship("Payment", backref="student", lazy="select")
 
 class Payment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -196,7 +197,7 @@ def search_students():
         ).all()
     return {
         "students": [
-            {"id": s.id, "name": s.name, "reg_number": s.reg_number}
+            {"id": s.id, "name": s.name, "reg_number": s.reg_number, "student_class": s.student_class}
             for s in results
         ]
     }
