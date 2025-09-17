@@ -204,6 +204,62 @@ def search_students():
         ]
     }
 
+@app.route("/student-financials")
+def student_financials():
+    if not session.get("admin"):
+        return jsonify({"error": "Unauthorized"}), 403
+
+    student_id = request.args.get("student_id")
+    term = request.args.get("term")
+    session_year = request.args.get("session")
+
+    if not all([student_id, term, session_year]):
+        return jsonify({"error": "Missing parameters"}), 400
+
+    student = Student.query.get(student_id)
+    if not student:
+        return jsonify({"error": "Student not found"}), 404
+
+    # Get fee record
+    fee_record = Fee.query.filter_by(
+        student_class=student.student_class,
+        term=term,
+        session=session_year
+    ).first()
+    total_fee = fee_record.amount if fee_record else 0
+
+    # Get payments for this student in this term/session
+    payments = Payment.query.filter_by(
+        student_id=student.id,
+        term=term,
+        session=session_year
+    ).order_by(Payment.payment_date).all()
+
+    total_paid = sum(p.amount_paid for p in payments)
+    outstanding = total_fee - total_paid
+
+    return jsonify({
+        "student": {
+            "id": student.id,
+            "name": student.name,
+            "reg_number": student.reg_number,
+            "class": student.student_class,
+        },
+        "term": term,
+        "session": session_year,
+        "total_fee": total_fee,
+        "total_paid": total_paid,
+        "outstanding": outstanding,
+        "payments": [
+            {
+                "id": p.id,
+                "amount_paid": p.amount_paid,
+                "payment_type": p.payment_type,
+                "payment_date": p.payment_date.strftime("%Y-%m-%d"),
+            } for p in payments
+        ]
+    })
+
 # ---------------------------
 # FEE MANAGEMENT
 # ---------------------------
@@ -362,3 +418,4 @@ def view_receipt(payment_id):
 # ---------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
+
