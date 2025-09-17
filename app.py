@@ -9,7 +9,9 @@ from datetime import datetime
 from sqlalchemy import UniqueConstraint
 from sqlalchemy.orm import joinedload
 
-# Initialize the Flask app
+# ---------------------------
+# APP INITIALIZATION
+# ---------------------------
 app = Flask(__name__)
 
 # ---------------------------
@@ -27,9 +29,11 @@ app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SECRET_KEY'] = 'supersecret'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Initialize the database and migrations
+# ---------------------------
+# DB + MIGRATIONS
+# ---------------------------
 db = SQLAlchemy(app)
-migrate = Migrate(app, db)  # This enables flask db commands
+migrate = Migrate(app, db)
 
 # ---------------------------
 # MODELS
@@ -39,7 +43,6 @@ class Student(db.Model):
     name = db.Column(db.String(150), nullable=False)
     reg_number = db.Column(db.String(50), unique=True, nullable=False)
     student_class = db.Column(db.String(50), nullable=False)
-    # FIX: Changed lazy='dynamic' to lazy='select' for eager loading
     payments = db.relationship("Payment", backref="student", lazy="select")
 
 class Payment(db.Model):
@@ -66,6 +69,7 @@ class Fee(db.Model):
 ADMIN_USER = "admin"
 ADMIN_PASS = "password"  # 🔴 Change this in production!
 
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
@@ -76,6 +80,7 @@ def index():
             return redirect(url_for("dashboard"))
         flash("Invalid credentials", "error")
     return render_template("index.html")
+
 
 @app.route('/dashboard')
 def dashboard():
@@ -94,6 +99,7 @@ def dashboard():
         outstanding_balance=outstanding_balance,
         recent_payments=recent_payments
     )
+
 
 @app.route("/logout")
 def logout():
@@ -119,6 +125,7 @@ def add_student():
         return redirect(url_for("add_student"))
     return render_template("add_student.html")
 
+
 @app.route("/student/<int:student_id>/payments")
 def student_payments(student_id):
     if not session.get("admin"):
@@ -128,7 +135,7 @@ def student_payments(student_id):
     payments = Payment.query.filter_by(student_id=student_id).all()
     return render_template("student_payments.html", student=student, payments=payments)
 
-# MODIFIED ROUTE FOR ADDING PAYMENT
+
 @app.route("/add-payment", methods=["GET", "POST"])
 def add_payment():
     if not session.get("admin"):
@@ -142,7 +149,6 @@ def add_payment():
         term = request.form.get("term")
         session_year = request.form.get("session")
 
-        # --- VALIDATION: Ensure a student is selected and inputs are valid ---
         if not student_id:
             flash("Please search for and select a student from the list.", "error")
             return redirect(url_for("add_payment"))
@@ -159,10 +165,8 @@ def add_payment():
             flash("Student not found.", "error")
             return redirect(url_for("add_payment"))
 
-        # Calculate the remaining balance
         remaining_balance = outstanding_balance - amount_paid
 
-        # Record the new payment
         payment = Payment(
             amount_paid=amount_paid,
             payment_date=datetime.today().date(),
@@ -174,9 +178,7 @@ def add_payment():
         db.session.add(payment)
         db.session.commit()
         
-        # Store the remaining balance in a session variable for the receipt view
         session['remaining_balance'] = remaining_balance
-        
         flash("Payment recorded successfully! Generating receipt...", "success")
         return redirect(url_for("view_receipt", payment_id=payment.id))
 
@@ -202,7 +204,6 @@ def search_students():
         ]
     }
 
-
 # ---------------------------
 # FEE MANAGEMENT
 # ---------------------------
@@ -223,7 +224,6 @@ def manage_fees():
         
         try:
             fee_amount = float(amount)
-            # Check if a fee record already exists to avoid duplicates
             existing_fee = Fee.query.filter_by(
                 student_class=student_class,
                 term=term,
@@ -271,6 +271,7 @@ def receipt_generator():
     
     return render_template("receipt_generator.html", search_results=search_results)
 
+
 @app.route("/view-receipt/<int:payment_id>")
 def view_receipt(payment_id):
     if not session.get("admin"):
@@ -278,13 +279,9 @@ def view_receipt(payment_id):
 
     payment = Payment.query.get_or_404(payment_id)
     student = payment.student
-    
-    # Check if a manual outstanding balance was provided from the add-payment page
     remaining_balance = session.pop('remaining_balance', None)
 
-    # If no manual balance was provided (e.g., from direct access or search)
     if remaining_balance is None:
-        # Calculate the remaining balance based on fees and payments
         total_paid_for_term = db.session.query(db.func.sum(Payment.amount_paid)).filter(
             Payment.student_id == student.id,
             Payment.term == payment.term,
@@ -304,54 +301,46 @@ def view_receipt(payment_id):
     p = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
-    # Logo
     if os.path.exists("alfurqan_logo.jpg"):
         p.drawImage("alfurqan_logo.jpg", 50, height - 120, width=80, height=60)
 
-    # Header
     p.setFont("Helvetica-Bold", 16)
     p.drawString(200, height - 50, "ALFURQAN ACADEMY")
     p.setFont("Helvetica", 10)
     p.drawString(200, height - 65, "Mai’adua | Motto: Academic Excellence")
     p.drawString(200, height - 80, "Tel: 07067702084, 08025076989")
 
-    # Receipt Title
     p.setFont("Helvetica-Bold", 14)
     p.drawString(230, height - 140, "PAYMENT RECEIPT")
 
-    # Student Info
     y = height - 180
     p.setFont("Helvetica", 12)
     p.drawString(50, y, f"Student Name: {student.name}")
     p.drawString(50, y - 20, f"Reg Number: {student.reg_number}")
     p.drawString(50, y - 40, f"Class: {student.student_class}")
 
-    # Payment Info
     p.drawString(50, y - 80, f"Date: {payment.payment_date.strftime('%Y-%m-%d')}")
     p.drawString(50, y - 100, f"Term: {payment.term}")
     p.drawString(50, y - 120, f"Session: {payment.session}")
     p.drawString(50, y - 140, f"Payment Type: {payment.payment_type}")
     p.drawString(50, y - 160, f"Receipt No: {payment.id}")
     
-    # Financial Summary
     y_summary = y - 200
     p.setFont("Helvetica-Bold", 12)
     p.drawString(50, y_summary, "Financial Summary")
     p.setFont("Helvetica", 12)
     p.drawString(50, y_summary - 20, f"Amount Paid: ₦{payment.amount_paid:,.2f}")
     p.setFont("Helvetica-Bold", 12)
-    p.setFillColorRGB(0.8, 0, 0) # Set color to red for balance
+    p.setFillColorRGB(0.8, 0, 0)
     if isinstance(remaining_balance, (float, int)):
         p.drawString(50, y_summary - 40, f"Remaining Balance: ₦{remaining_balance:,.2f}")
     else:
         p.drawString(50, y_summary - 40, f"Remaining Balance: {remaining_balance}")
-    p.setFillColorRGB(0, 0, 0) # Reset color
+    p.setFillColorRGB(0, 0, 0)
 
-    # Footer
     p.setFont("Helvetica-Oblique", 10)
     p.drawString(200, 80, "Thank you for your payment!")
 
-    # Signatures
     p.setFont("Helvetica", 12)
     p.drawString(50, 120, "______________________")
     p.drawString(50, 105, "Admin")
@@ -369,9 +358,7 @@ def view_receipt(payment_id):
     )
 
 # ---------------------------
-# INIT
+# ENTRY POINT
 # ---------------------------
 if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()  # Ensures tables are created
     app.run(host="0.0.0.0", port=5000, debug=True)
