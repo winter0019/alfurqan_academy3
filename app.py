@@ -6,7 +6,8 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 import os
 from datetime import datetime
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import UniqueConstraint, and_
+from sqlalchemy.orm import joinedload
 
 # Initialize the Flask app
 app = Flask(__name__)
@@ -38,7 +39,7 @@ class Student(db.Model):
     name = db.Column(db.String(150), nullable=False)
     reg_number = db.Column(db.String(50), unique=True, nullable=False)
     student_class = db.Column(db.String(50), nullable=False)
-    payments = db.relationship("Payment", backref="student", lazy=True)
+    payments = db.relationship("Payment", backref="student", lazy="dynamic")
 
 class Payment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -140,7 +141,7 @@ def add_payment():
         term = request.form.get("term")
         session_year = request.form.get("session")
 
-        # --- VALIDATION: Ensure a student is selected ---
+        # --- VALIDATION: Ensure a student is selected and inputs are valid ---
         if not student_id:
             flash("Please search for and select a student from the list.", "error")
             return redirect(url_for("add_payment"))
@@ -174,7 +175,7 @@ def add_payment():
         
         # Store the remaining balance in a session variable for the receipt view
         session['remaining_balance'] = remaining_balance
-
+        
         flash("Payment recorded successfully! Generating receipt...", "success")
         return redirect(url_for("view_receipt", payment_id=payment.id))
 
@@ -253,6 +254,22 @@ def manage_fees():
 # ---------------------------
 # RECEIPT GENERATOR
 # ---------------------------
+@app.route("/receipt-generator", methods=["GET", "POST"])
+def receipt_generator():
+    if not session.get("admin"):
+        return redirect(url_for("index"))
+
+    search_results = []
+    if request.method == "POST":
+        query = request.form.get("search_query")
+        if query:
+            search_results = Student.query.filter(
+                (Student.name.ilike(f"%{query}%")) |
+                (Student.reg_number.ilike(f"%{query}%"))
+            ).options(joinedload(Student.payments)).all()
+    
+    return render_template("receipt_generator.html", search_results=search_results)
+
 @app.route("/view-receipt/<int:payment_id>")
 def view_receipt(payment_id):
     if not session.get("admin"):
@@ -261,16 +278,18 @@ def view_receipt(payment_id):
     payment = Payment.query.get_or_404(payment_id)
     student = payment.student
     
-    # Retrieve the remaining balance from the session
+    # Check if a manual outstanding balance was provided from the add-payment page
     remaining_balance = session.pop('remaining_balance', None)
 
+    # If no manual balance was provided (e.g., from direct access or search)
     if remaining_balance is None:
-        # If the user accesses the receipt directly, calculate a basic balance
+        # Calculate the remaining balance based on fees and payments
         total_paid_for_term = db.session.query(db.func.sum(Payment.amount_paid)).filter(
             Payment.student_id == student.id,
             Payment.term == payment.term,
             Payment.session == payment.session
         ).scalar() or 0
+        
         fee_record = Fee.query.filter_by(
             student_class=student.student_class,
             term=payment.term,
