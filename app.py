@@ -43,6 +43,10 @@ class Student(db.Model):
     name = db.Column(db.String(150), nullable=False)
     reg_number = db.Column(db.String(50), unique=True, nullable=False)
     student_class = db.Column(db.String(50), nullable=False)
+    
+    # 🌟 ADD THIS LINE to acknowledge the column in the DB
+    school_id = db.Column(db.Integer, nullable=False) 
+    
     payments = db.relationship("Payment", backref="student", lazy="select")
 
 class Payment(db.Model):
@@ -118,13 +122,21 @@ def add_student():
         name = request.form["name"]
         reg_number = request.form["reg_number"]
         student_class = request.form["student_class"]
-        student = Student(name=name, reg_number=reg_number, student_class=student_class)
+        
+        # 🌟 ADD THE SCHOOL ID HERE
+        DEFAULT_SCHOOL_ID = 1 # <-- Use the ID your other project uses
+        
+        student = Student(
+            name=name, 
+            reg_number=reg_number, 
+            student_class=student_class,
+            school_id=DEFAULT_SCHOOL_ID # <-- Pass the value
+        )
         db.session.add(student)
         db.session.commit()
         flash("Student added successfully!", "success")
         return redirect(url_for("add_student"))
     return render_template("add_student.html")
-
 
 @app.route("/student/<int:student_id>/payments")
 def student_payments(student_id):
@@ -418,4 +430,5 @@ def view_receipt(payment_id):
 # ---------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
+
 
