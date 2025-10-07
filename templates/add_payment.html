@@ -4,7 +4,7 @@
     <h2 class="text-xl font-bold mb-4">Record Payment</h2>
     <form method="POST">
         <input type="text" id="student-search" placeholder="Search student by name or reg number"
-               class="w-full border p-2 mb-3 rounded">
+            class="w-full border p-2 mb-3 rounded">
         <ul id="search-results" class="border rounded mb-3 hidden"></ul>
         <input type="hidden" name="student_id" id="student_id">
 
@@ -18,14 +18,14 @@
                 Current Outstanding Balance (₦)
             </label>
             <input type="number" step="0.01" name="outstanding_balance_input" id="outstanding_balance_input"
-                   placeholder="e.g. 50000.00"
-                   class="w-full border p-2 mt-1 rounded" required>
+                placeholder="0.00"
+                class="w-full border p-2 mt-1 rounded" required readonly>
         </div>
 
         <input type="number" step="0.01" name="amount_paid" placeholder="Amount Paid (₦)"
-               class="w-full border p-2 mb-3 rounded" required>
+            class="w-full border p-2 mb-3 rounded" required>
         <input type="text" name="payment_type" placeholder="Payment Type"
-               class="w-full border p-2 mb-3 rounded" required>
+            class="w-full border p-2 mb-3 rounded" required>
 
         <select name="term" id="term-select" class="w-full border p-2 mb-3 rounded" required>
             <option value="">Select Term</option>
@@ -35,7 +35,7 @@
         </select>
 
         <input type="text" name="session" id="session-input" placeholder="Session (e.g. 2024/2025)"
-               class="w-full border p-2 mb-3 rounded" required>
+            class="w-full border p-2 mb-3 rounded" required>
 
         <button type="submit" class="w-full bg-green-600 text-white py-2 rounded">Save Payment</button>
     </form>
@@ -47,7 +47,51 @@
     const hiddenId = document.getElementById("student_id");
     const studentInfoDiv = document.getElementById("student-info");
     const studentNameSpan = document.getElementById("student-name");
+    const outstandingInput = document.getElementById("outstanding_balance_input");
+    const studentClassSpan = document.getElementById("student-class"); // Added span for class
+    const termSelect = document.getElementById("term-select");
+    const sessionInput = document.getElementById("session-input");
 
+
+    // Function to fetch and update the outstanding balance
+    async function getFinancials() {
+        const studentId = hiddenId.value;
+        const term = termSelect.value;
+        const sessionYear = sessionInput.value;
+
+        // CRITICAL FIX: Ensure all three required parameters are present before fetching
+        if (!studentId || !term || !sessionYear) {
+            outstandingInput.value = '';
+            return; 
+        }
+
+        try {
+            const res = await fetch(`/student-financials?student_id=${studentId}&term=${term}&session=${sessionYear}`);
+            
+            if (!res.ok) {
+                // Read the error message from the Python endpoint if available
+                const errorData = await res.json();
+                alert(`Error: ${errorData.error}`);
+                outstandingInput.value = '';
+                return;
+            }
+
+            const data = await res.json();
+            
+            // Update the outstanding balance input field
+            // Use Math.max to prevent display of negative numbers if the DB has an overpayment
+            outstandingInput.value = Math.max(0, data.outstanding).toFixed(2);
+
+        } catch (error) {
+            // This catches network errors or JSON parsing errors
+            alert("Failed to fetch financial data. Please check connection.");
+            outstandingInput.value = '';
+        }
+    }
+
+    // --- Event Listeners ---
+    
+    // 1. Student Search Listener 
     searchInput.addEventListener("input", async function() {
         const q = this.value;
         if (q.length < 2) {
@@ -69,10 +113,17 @@
                 li.className = "p-2 hover:bg-gray-100 cursor-pointer";
                 li.onclick = () => {
                     searchInput.value = `${s.name} (${s.reg_number})`;
+                    
+                    // Set all necessary student data on click
                     hiddenId.value = s.id;
+                    studentNameSpan.textContent = `${s.name} (${s.reg_number})`;
+                    studentClassSpan.textContent = s.student_class; 
+                    
                     resultsList.classList.add("hidden");
-                    studentNameSpan.textContent = s.name;
                     studentInfoDiv.classList.remove("hidden");
+                    
+                    // Attempt to fetch financials after student is selected
+                    getFinancials(); 
                 };
                 resultsList.appendChild(li);
             });
@@ -81,5 +132,11 @@
             studentInfoDiv.classList.add("hidden");
         }
     });
+    
+    // 2. Term and Session Change Listeners (NEW)
+    termSelect.addEventListener("change", getFinancials);
+    sessionInput.addEventListener("change", getFinancials);
+    sessionInput.addEventListener("input", getFinancials); 
+    
 </script>
 {% endblock %}
