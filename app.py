@@ -6,7 +6,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 import os
 from datetime import datetime
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import UniqueConstraint, func
 from sqlalchemy.orm import joinedload
 
 # ---------------------------
@@ -43,10 +43,7 @@ class Student(db.Model):
     name = db.Column(db.String(150), nullable=False)
     reg_number = db.Column(db.String(50), unique=True, nullable=False)
     student_class = db.Column(db.String(50), nullable=False)
-    
-    # 🌟 ADD THIS LINE to acknowledge the column in the DB
-    school_id = db.Column(db.Integer, nullable=False) 
-    
+    # school_id has been removed, assuming the DB constraint is also dropped.
     payments = db.relationship("Payment", backref="student", lazy="select")
 
 class Payment(db.Model):
@@ -86,6 +83,9 @@ def index():
     return render_template("index.html")
 
 
+# ---------------------------
+# DASHBOARD ENHANCEMENT
+# ---------------------------
 @app.route('/dashboard')
 def dashboard():
     if not session.get("admin"):
@@ -93,14 +93,22 @@ def dashboard():
 
     total_students = Student.query.count()
     total_payments = db.session.query(db.func.sum(Payment.amount_paid)).scalar() or 0
-    outstanding_balance = 0
+    
+    # ENHANCEMENT: Calculate Outstanding Balance
+    # 1. Calculate Total Fees due across all recorded Fee records
+    total_fees_due = db.session.query(db.func.sum(Fee.amount)).scalar() or 0
+    
+    # 2. Calculate Outstanding Balance (Total Fees Due - Total Paid)
+    outstanding_balance = total_fees_due - total_payments
+    
     recent_payments = Payment.query.order_by(Payment.payment_date.desc()).limit(5).all()
 
     return render_template(
         'dashboard.html',
         total_students=total_students,
         total_payments=total_payments,
-        outstanding_balance=outstanding_balance,
+        # Ensure outstanding balance is not negative
+        outstanding_balance=max(0, outstanding_balance),
         recent_payments=recent_payments
     )
 
@@ -123,20 +131,26 @@ def add_student():
         reg_number = request.form["reg_number"]
         student_class = request.form["student_class"]
         
-        # 🌟 ADD THE SCHOOL ID HERE
-        DEFAULT_SCHOOL_ID = 1 # <-- Use the ID your other project uses
+        # FIX: school_id logic removed entirely
+        student = Student(name=name, reg_number=reg_number, student_class=student_class)
         
-        student = Student(
-            name=name, 
-            reg_number=reg_number, 
-            student_class=student_class,
-            school_id=DEFAULT_SCHOOL_ID # <-- Pass the value
-        )
-        db.session.add(student)
-        db.session.commit()
-        flash("Student added successfully!", "success")
-        return redirect(url_for("add_student"))
+        try:
+            db.session.add(student)
+            db.session.commit()
+            flash("Student added successfully!", "success")
+            return redirect(url_for("add_student"))
+        except Exception as e:
+            db.session.rollback()
+            # Catch UniqueConstraint error specifically (e.g., duplicate reg_number)
+            if 'unique constraint' in str(e).lower():
+                flash("Error: Registration number already exists.", "error")
+            else:
+                # Log or display other errors
+                flash(f"Error adding student: {e}", "error")
+            return redirect(url_for("add_student"))
+            
     return render_template("add_student.html")
+
 
 @app.route("/student/<int:student_id>/payments")
 def student_payments(student_id):
@@ -430,5 +444,3 @@ def view_receipt(payment_id):
 # ---------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
-
-
