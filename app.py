@@ -161,7 +161,6 @@ def student_payments(student_id):
     payments = Payment.query.filter_by(student_id=student_id).all()
     return render_template("student_payments.html", student=student, payments=payments)
 
-
 @app.route("/add-payment", methods=["GET", "POST"])
 def add_payment():
     if not session.get("admin"):
@@ -169,7 +168,7 @@ def add_payment():
 
     if request.method == "POST":
         student_id = request.form.get("student_id")
-        outstanding_balance_str = request.form.get("outstanding_balance_input")
+        # outstanding_balance_str is now ignored in favor of calculated fee
         amount_paid_str = request.form.get("amount_paid")
         payment_type = request.form.get("payment_type")
         term = request.form.get("term")
@@ -180,10 +179,9 @@ def add_payment():
             return redirect(url_for("add_payment"))
         
         try:
-            outstanding_balance = float(outstanding_balance_str)
             amount_paid = float(amount_paid_str)
         except (ValueError, TypeError):
-            flash("Invalid amount or outstanding balance.", "error")
+            flash("Invalid amount.", "error")
             return redirect(url_for("add_payment"))
 
         student = Student.query.get(student_id)
@@ -191,7 +189,28 @@ def add_payment():
             flash("Student not found.", "error")
             return redirect(url_for("add_payment"))
 
-        remaining_balance = outstanding_balance - amount_paid
+        # --- FIX: Calculate total fee and current total paid for the session/term ---
+        
+        # 1. Get the total fee for the student's class, term, and session
+        fee_record = Fee.query.filter_by(
+            student_class=student.student_class,
+            term=term,
+            session=session_year
+        ).first()
+        total_fee = fee_record.amount if fee_record else 0.0
+
+        # 2. Get the total amount ALREADY paid for this term/session (excluding the current payment)
+        total_previously_paid = db.session.query(db.func.sum(Payment.amount_paid)).filter(
+            Payment.student_id == student.id,
+            Payment.term == term,
+            Payment.session == session_year
+        ).scalar() or 0.0
+        
+        # 3. Calculate the outstanding balance *after* the current payment
+        total_paid_after_current = total_previously_paid + amount_paid
+        remaining_balance = total_fee - total_paid_after_current
+        
+        # --- End Fix ---
 
         payment = Payment(
             amount_paid=amount_paid,
@@ -204,7 +223,13 @@ def add_payment():
         db.session.add(payment)
         db.session.commit()
         
+        # Save the CORRECT remaining balance to the session
         session['remaining_balance'] = remaining_balance
+        
+        # If total fee was 0, warn the user on the next page
+        if total_fee == 0.0:
+            flash(f"Warning: No fee record found for Class {student.student_class}, {term}, {session_year}. Remaining balance is based on ₦0.00 total fee.", "warning")
+
         flash("Payment recorded successfully! Generating receipt...", "success")
         return redirect(url_for("view_receipt", payment_id=payment.id))
 
@@ -444,3 +469,4 @@ def view_receipt(payment_id):
 # ---------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
+
